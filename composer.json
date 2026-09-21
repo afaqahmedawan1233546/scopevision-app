@@ -1,0 +1,17 @@
+{
+    "name": "scopevision/shop",
+    "description": "Core PHP device shop with Excel (xlsx/xls) product import into MySQL",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "phpoffice/phpspreadsheet": "^1.29"
+    },
+    "autoload": {
+        "psr-4": {
+            "Shop\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
