@@ -164,17 +164,21 @@ final class ProductRepository
     }
 
     /**
-     * Variations of the same model: other rows sharing the product name but
-     * differing in colour / storage / carrier / grade.
+     * Variations of the same model: other rows from the same manufacturer
+     * sharing the product name but differing in colour / storage / carrier / grade.
      *
      * @return array<int, array<string, mixed>>
      */
     public function variations(array $product): array
     {
         $statement = $this->pdo->prepare(
-            'SELECT * FROM products WHERE name = :name ORDER BY price ASC, storage ASC, color ASC'
+            'SELECT * FROM products WHERE name = :name AND manufacturer <=> :manufacturer
+             ORDER BY price ASC, storage ASC, color ASC'
         );
-        $statement->execute([':name' => $product['name']]);
+        $statement->execute([
+            ':name'         => $product['name'],
+            ':manufacturer' => $product['manufacturer'],
+        ]);
 
         return $statement->fetchAll();
     }

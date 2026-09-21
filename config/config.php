@@ -18,8 +18,11 @@ return [
         'charset'  => 'utf8mb4',
     ],
     'admin' => [
-        // Simple gate for the import page. Override with ADMIN_PASSWORD.
-        'password' => getenv('ADMIN_PASSWORD') ?: 'admin123',
+        // Gate for the import page. Required: the page refuses to sign anyone in
+        // until ADMIN_PASSWORD is set, so there is no shipped default password.
+        'password'          => getenv('ADMIN_PASSWORD') ?: '',
+        'max_attempts'      => 5,
+        'lockout_seconds'   => 900,
     ],
     'shop' => [
         'per_page' => 12,

@@ -25,6 +25,10 @@ Connection details and the admin password are read from environment variables
 with local defaults in `config/config.php`:
 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `ADMIN_PASSWORD`.
 
+`ADMIN_PASSWORD` has no default: the import page refuses to sign anyone in until
+it is set. The login is rate limited (5 attempts, then a 15 minute lockout) and
+all POST forms are CSRF protected.
+
 ## Importing products
 
 Web: `/admin/import-products.php` — sign in with the admin password, upload an
@@ -33,9 +37,11 @@ skipped, errors, plus the exact column mapping that was applied).
 
 CLI: `php bin/import.php /path/to/inventory.xlsx`
 
-Imports are idempotent: rows are matched on `SKU` (falling back to
-model + color + storage + carrier + grade when a SKU is missing), so re-importing
-the same file updates changed products instead of creating duplicates.
+Imports are idempotent: rows are matched on `SKU`, so re-importing the same file
+updates changed products instead of creating duplicates. Rows without a SKU get a
+stable derived key (`AUTO-<hash>`) built from model + color + storage + carrier +
+grade, so they also update rather than duplicate on re-import. Uploaded workbooks
+are deleted once the import finishes.
 
 ## Column mapping
 

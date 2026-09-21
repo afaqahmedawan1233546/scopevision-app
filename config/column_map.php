@@ -26,7 +26,7 @@ return [
             'db'       => 'sku',
             'aliases'  => ['SKU', 'Sku Code', 'Product ID', 'Item ID'],
             'type'     => 'string',
-            'required' => true,
+            'required' => false,
             'max'      => 64,
             'label'    => 'SKU',
         ],
@@ -150,8 +150,9 @@ return [
     ],
 
     /**
-     * Unique key used to decide between INSERT and UPDATE.
-     * Falls back to the composite key when the primary one is empty in a row.
+     * Unique key used to decide between INSERT and UPDATE. When a row carries no
+     * value for it, the importer derives a stable key from the composite
+     * fallback columns instead, so re-imports still update the same product.
      */
     'unique_key'          => 'sku',
     'fallback_unique_key' => ['name', 'color', 'storage', 'carrier', 'grade'],

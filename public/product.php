@@ -52,6 +52,7 @@ require dirname(__DIR__) . '/templates/header.php';
 
         <form class="add-to-cart" method="post" action="cart.php">
             <input type="hidden" name="action" value="add">
+            <input type="hidden" name="csrf_token" value="<?= Helpers::e($_SESSION['csrf_token']) ?>">
             <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
             <label for="quantity">Quantity</label>
             <input id="quantity" type="number" name="quantity" value="1" min="1" max="<?= Cart::maxQuantity() ?>">

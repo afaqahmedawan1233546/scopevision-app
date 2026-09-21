@@ -2,14 +2,12 @@
 -- Excluded by requirement (no columns exist for them):
 --   Cost, IMEI/Serial, Purch Date, Supplier, Test By, Notes, Quantity in Stock.
 
-CREATE DATABASE IF NOT EXISTS `scopevision_shop`
-    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE `scopevision_shop`;
+-- The target database is created and selected by database/migrate.php from the
+-- configured DB_NAME, so no database name is hard coded here.
 
 CREATE TABLE IF NOT EXISTS `products` (
     `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `sku`             VARCHAR(64)  NOT NULL,
+    `sku`             VARCHAR(64)  NOT NULL COMMENT 'Excel SKU, or a derived key when the sheet has no SKU',
     `category`        VARCHAR(100)     NULL,
     `device_type`     VARCHAR(100)     NULL,
     `manufacturer`    VARCHAR(100)     NULL,

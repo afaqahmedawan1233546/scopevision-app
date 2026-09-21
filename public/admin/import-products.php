@@ -11,32 +11,52 @@ use Shop\ImportResult;
 use Shop\ProductRepository;
 
 $uploadConfig = Config::get('uploads');
-$adminPassword = Config::get('admin')['password'];
+$adminConfig = Config::get('admin');
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(16));
-}
 $csrfToken = $_SESSION['csrf_token'];
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+$tokenValid = $isPost && hash_equals($csrfToken, (string) ($_POST['csrf_token'] ?? ''));
 
 $errors = [];
 $result = null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login') {
-    if (hash_equals((string) $adminPassword, (string) ($_POST['password'] ?? ''))) {
+$attempts = (int) ($_SESSION['login_attempts'] ?? 0);
+$lockedUntil = (int) ($_SESSION['login_locked_until'] ?? 0);
+$lockedFor = max(0, $lockedUntil - time());
+
+if ($isPost && ($_POST['action'] ?? '') === 'login') {
+    if (!$tokenValid) {
+        $errors[] = 'Invalid session token. Please try again.';
+    } elseif ($adminConfig['password'] === '') {
+        $errors[] = 'No admin password is configured. Set the ADMIN_PASSWORD environment variable.';
+    } elseif ($lockedFor > 0) {
+        $errors[] = sprintf('Too many failed attempts. Try again in %d minute(s).', (int) ceil($lockedFor / 60));
+    } elseif (hash_equals((string) $adminConfig['password'], (string) ($_POST['password'] ?? ''))) {
+        session_regenerate_id(true);
         $_SESSION['is_admin'] = true;
+        unset($_SESSION['login_attempts'], $_SESSION['login_locked_until']);
     } else {
-        $errors[] = 'Incorrect password.';
+        $attempts++;
+        $_SESSION['login_attempts'] = $attempts;
+        if ($attempts >= (int) $adminConfig['max_attempts']) {
+            $_SESSION['login_locked_until'] = time() + (int) $adminConfig['lockout_seconds'];
+            $_SESSION['login_attempts'] = 0;
+            $errors[] = 'Too many failed attempts. The login is locked for '
+                . (int) ceil(((int) $adminConfig['lockout_seconds']) / 60) . ' minutes.';
+        } else {
+            $errors[] = 'Incorrect password.';
+        }
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logout') {
+if ($isPost && ($_POST['action'] ?? '') === 'logout' && $tokenValid) {
     unset($_SESSION['is_admin']);
 }
 
 $isAdmin = !empty($_SESSION['is_admin']);
 
-if ($isAdmin && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'import') {
-    if (!hash_equals($csrfToken, (string) ($_POST['csrf_token'] ?? ''))) {
+if ($isAdmin && $isPost && ($_POST['action'] ?? '') === 'import') {
+    if (!$tokenValid) {
         $errors[] = 'Invalid session token. Please try again.';
     } elseif (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
         $errors[] = match ($_FILES['excel_file']['error'] ?? UPLOAD_ERR_NO_FILE) {
@@ -65,6 +85,11 @@ if ($isAdmin && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? ''
                     $result = (new ExcelImporter())->import($target, (string) $file['name']);
                 } catch (Throwable $e) {
                     $errors[] = $e->getMessage();
+                } finally {
+                    // The workbook is only transient input for the importer.
+                    if (is_file($target)) {
+                        unlink($target);
+                    }
                 }
             }
         }
@@ -87,8 +112,12 @@ require dirname(__DIR__, 2) . '/templates/header.php';
 <?php endforeach; ?>
 
 <?php if (!$isAdmin): ?>
+    <?php if ($adminConfig['password'] === ''): ?>
+        <p class="alert alert-error">Set the <code>ADMIN_PASSWORD</code> environment variable to enable the import page.</p>
+    <?php endif; ?>
     <form class="card login-form" method="post">
         <input type="hidden" name="action" value="login">
+        <input type="hidden" name="csrf_token" value="<?= Helpers::e($csrfToken) ?>">
         <label for="password">Admin password</label>
         <input id="password" type="password" name="password" required>
         <button class="btn btn-primary" type="submit">Sign in</button>
@@ -189,6 +218,7 @@ require dirname(__DIR__, 2) . '/templates/header.php';
 
     <form method="post" class="logout-form">
         <input type="hidden" name="action" value="logout">
+        <input type="hidden" name="csrf_token" value="<?= Helpers::e($csrfToken) ?>">
         <button class="btn btn-link" type="submit">Sign out</button>
     </form>
 <?php endif; ?>

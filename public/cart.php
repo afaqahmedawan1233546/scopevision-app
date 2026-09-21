@@ -11,6 +11,13 @@ use Shop\ProductRepository;
 $repository = new ProductRepository();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals((string) $_SESSION['csrf_token'], (string) ($_POST['csrf_token'] ?? ''))) {
+        http_response_code(400);
+        $_SESSION['flash'] = 'Your session expired. Please try again.';
+        header('Location: cart.php');
+        exit;
+    }
+
     $action = (string) ($_POST['action'] ?? '');
     $productId = (int) ($_POST['product_id'] ?? 0);
     $quantity = (int) ($_POST['quantity'] ?? 1);
@@ -18,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add' && $repository->find($productId) !== null) {
         Cart::add($productId, $quantity);
         $_SESSION['flash'] = 'Product added to your cart.';
-    } elseif ($action === 'update') {
+    } elseif ($action === 'update' && $repository->find($productId) !== null) {
         Cart::update($productId, $quantity);
     } elseif ($action === 'remove') {
         Cart::remove($productId);
@@ -77,6 +84,7 @@ require dirname(__DIR__) . '/templates/header.php';
                 <td>
                     <form class="qty-form" method="post" action="cart.php">
                         <input type="hidden" name="action" value="update">
+                        <input type="hidden" name="csrf_token" value="<?= Helpers::e($_SESSION['csrf_token']) ?>">
                         <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
                         <input type="number" name="quantity" value="<?= $quantity ?>" min="0" max="<?= Cart::maxQuantity() ?>"
                                aria-label="Cart quantity">
@@ -87,6 +95,7 @@ require dirname(__DIR__) . '/templates/header.php';
                 <td>
                     <form method="post" action="cart.php">
                         <input type="hidden" name="action" value="remove">
+                        <input type="hidden" name="csrf_token" value="<?= Helpers::e($_SESSION['csrf_token']) ?>">
                         <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
                         <button class="btn btn-link" type="submit">Remove</button>
                     </form>
@@ -99,6 +108,7 @@ require dirname(__DIR__) . '/templates/header.php';
     <div class="cart-summary">
         <form method="post" action="cart.php">
             <input type="hidden" name="action" value="clear">
+            <input type="hidden" name="csrf_token" value="<?= Helpers::e($_SESSION['csrf_token']) ?>">
             <button class="btn btn-link" type="submit">Clear cart</button>
         </form>
         <p class="cart-total">Total <strong><?= Helpers::money($total) ?></strong></p>

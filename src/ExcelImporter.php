@@ -74,7 +74,8 @@ final class ExcelImporter
             try {
                 $data = $this->extractRow($row, $columnIndex);
             } catch (ValidationException $e) {
-                $result->addError($rowNumber, (string) ($row[array_search('sku', $columnIndex, true)] ?? ''), $e->getMessage());
+                $skuIndex = array_search(ColumnMap::uniqueKey(), $columnIndex, true);
+                $result->addError($rowNumber, $skuIndex === false ? '' : (string) ($row[$skuIndex] ?? ''), $e->getMessage());
                 continue;
             }
 
@@ -175,6 +176,11 @@ final class ExcelImporter
             }
         }
 
+        $unique = ColumnMap::uniqueKey();
+        if ($data[$unique] === null || $data[$unique] === '') {
+            $data[$unique] = $this->derivedUniqueKey($data);
+        }
+
         return $data;
     }
 
@@ -242,20 +248,30 @@ final class ExcelImporter
         }
     }
 
+    /**
+     * Stable identifier for sheets without a SKU column, built from the
+     * configured fallback key so re-imports update instead of duplicating.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function derivedUniqueKey(array $data): string
+    {
+        $parts = [];
+        foreach (ColumnMap::fallbackUniqueKey() as $column) {
+            $parts[] = strtolower(trim((string) ($data[$column] ?? '')));
+        }
+
+        if (implode('', $parts) === '') {
+            throw new ValidationException('Row has no SKU and no values to identify it by.');
+        }
+
+        return 'AUTO-' . substr(sha1(implode('|', $parts)), 0, 24);
+    }
+
     /** @param array<string, mixed> $data */
     private function duplicateKey(array $data): string
     {
-        $unique = ColumnMap::uniqueKey();
-        if (!empty($data[$unique])) {
-            return 'u:' . strtolower((string) $data[$unique]);
-        }
-
-        $parts = [];
-        foreach (ColumnMap::fallbackUniqueKey() as $column) {
-            $parts[] = strtolower((string) ($data[$column] ?? ''));
-        }
-
-        return 'c:' . implode('|', $parts);
+        return strtolower((string) $data[ColumnMap::uniqueKey()]);
     }
 
     /**
@@ -286,7 +302,7 @@ final class ExcelImporter
         foreach (ColumnMap::dbColumns() as $column) {
             $new = $data[$column];
             $old = $existing[$column];
-            if (is_float($new) || is_numeric($old) && is_numeric($new)) {
+            if (is_numeric($old) && is_numeric($new)) {
                 if ((float) $old !== (float) $new) {
                     $changed[$column] = $new;
                 }
@@ -319,22 +335,8 @@ final class ExcelImporter
     private function findExisting(array $data): ?array
     {
         $unique = ColumnMap::uniqueKey();
-        if (!empty($data[$unique])) {
-            $statement = $this->pdo->prepare("SELECT * FROM products WHERE `$unique` = :value LIMIT 1");
-            $statement->execute([':value' => $data[$unique]]);
-            $row = $statement->fetch();
-
-            return $row ?: null;
-        }
-
-        $conditions = [];
-        $params = [];
-        foreach (ColumnMap::fallbackUniqueKey() as $index => $column) {
-            $conditions[] = "`$column` <=> :p$index";
-            $params[":p$index"] = $data[$column];
-        }
-        $statement = $this->pdo->prepare('SELECT * FROM products WHERE ' . implode(' AND ', $conditions) . ' LIMIT 1');
-        $statement->execute($params);
+        $statement = $this->pdo->prepare("SELECT * FROM products WHERE `$unique` = :value LIMIT 1");
+        $statement->execute([':value' => $data[$unique]]);
         $row = $statement->fetch();
 
         return $row ?: null;
